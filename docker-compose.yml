@@ -1,0 +1,51 @@
+services:
+  temporal:
+    image: temporalio/auto-setup:latest
+    container_name: trellis_temporal
+    ports:
+      - "7233:7233"
+      - "8088:8088"
+    restart: unless-stopped
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=app
+      - POSTGRES_PWD=trellisAI
+      - POSTGRES_SEEDS=postgres
+      - POSTGRES_DB=appdb
+
+  postgres:
+    image: postgres:15
+    container_name: trellis_postgres
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: trellisAI
+      POSTGRES_DB: appdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d appdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    container_name: trellis_app
+    depends_on:
+      temporal:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://app:trellisAI@postgres:5432/appdb
+      TEMPORAL_ADDRESS: temporal:7233
+      FLAKY_MODE: "ON"     
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
